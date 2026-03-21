@@ -5,7 +5,6 @@ import os
 import struct
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import Optional
 
 import numpy as np
 import soundfile as sf
@@ -19,7 +18,19 @@ MODEL_DIR = os.getenv("MODEL_DIR", "/app/models")
 VOICES_DIR = os.getenv("VOICES_DIR", "/app/voices")
 
 model = None
-pipeline = None
+pipelines = {}
+VOICE_PREFIX_TO_LANG_CODE = {
+    "a": "a",
+    "b": "b",
+    "e": "e",
+    "f": "f",
+    "h": "h",
+    "i": "i",
+    "j": "j",
+    "p": "p",
+    "z": "z",
+}
+SUPPORTED_LANG_CODES = set(VOICE_PREFIX_TO_LANG_CODE.values())
 
 
 class AudioFormat(str, Enum):
@@ -33,9 +44,39 @@ class AudioFormat(str, Enum):
 class TTSRequest(BaseModel):
     input: str
     voice: str = "af_heart"
+    lang_code: str | None = None
     speed: float = 1.0
     response_format: AudioFormat = AudioFormat.wav
     bitrate: str = "192k"
+
+
+def infer_lang_code(voice: str) -> str:
+    """Infer Kokoro language code from the voice prefix."""
+    prefix = voice.split("_", maxsplit=1)[0].strip().lower()
+    if not prefix:
+        raise HTTPException(400, "Voice cannot be empty")
+
+    lang_code = VOICE_PREFIX_TO_LANG_CODE.get(prefix[0])
+    if not lang_code:
+        raise HTTPException(400, f"Unable to infer language from voice '{voice}'")
+
+    return lang_code
+
+
+def get_pipeline(lang_code: str):
+    """Reuse one pipeline per language code."""
+    if lang_code not in SUPPORTED_LANG_CODES:
+        raise HTTPException(400, f"Unsupported lang_code '{lang_code}'")
+
+    pipeline = pipelines.get(lang_code)
+    if pipeline is not None:
+        return pipeline
+
+    from kokoro import KPipeline
+
+    pipeline = KPipeline(lang_code=lang_code, model=model, device="cuda")
+    pipelines[lang_code] = pipeline
+    return pipeline
 
 
 def make_wav_header(data_size: int = 0xFFFFFFFF) -> bytes:
@@ -104,8 +145,8 @@ def encode_audio(pcm_data: bytes, fmt: AudioFormat, bitrate: str) -> tuple[bytes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, pipeline
-    from kokoro import KModel, KPipeline
+    global model, pipelines
+    from kokoro import KModel
 
     config_path = os.path.join(MODEL_DIR, "config.json")
     model_path = os.path.join(MODEL_DIR, "kokoro-v1_0.pth")
@@ -118,7 +159,7 @@ async def lifespan(app: FastAPI):
 
     print(f"Loading Kokoro model from {MODEL_DIR}...")
     model = KModel(config=config_path, model=model_path).eval().cuda()
-    pipeline = KPipeline(lang_code="a", model=model, device="cuda")
+    pipelines = {}
     print("Model loaded and ready.")
     yield
 
@@ -257,12 +298,16 @@ async def list_voices():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "model_loaded": model is not None}
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "cached_language_pipelines": sorted(pipelines),
+    }
 
 
 @app.post("/v1/audio/speech")
 async def synthesize(req: TTSRequest):
-    if not pipeline:
+    if model is None:
         raise HTTPException(503, "Model not loaded")
 
     if not req.input.strip():
@@ -271,6 +316,9 @@ async def synthesize(req: TTSRequest):
     voice_path = os.path.join(VOICES_DIR, f"{req.voice}.pt")
     if not os.path.exists(voice_path):
         raise HTTPException(404, f"Voice '{req.voice}' not found")
+
+    lang_code = (req.lang_code or infer_lang_code(req.voice)).strip().lower()
+    pipeline = get_pipeline(lang_code)
 
     # For WAV and PCM, stream chunks as they arrive
     if req.response_format in (AudioFormat.wav, AudioFormat.pcm):

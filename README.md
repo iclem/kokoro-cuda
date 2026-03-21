@@ -31,6 +31,7 @@ docker run --gpus all -p 8880:8880 -v kokoro-models:/app/models -v kokoro-voices
 {
   "input": "Hello, this is a test.",
   "voice": "af_heart",
+  "lang_code": "a",
   "speed": 1.0,
   "response_format": "wav",
   "bitrate": "192k"
@@ -41,9 +42,12 @@ docker run --gpus all -p 8880:8880 -v kokoro-models:/app/models -v kokoro-voices
 |-----------|---------|---------|
 | input | (required) | Any text |
 | voice | af_heart | 49 voices — see `GET /v1/voices` |
+| lang_code | inferred from voice | Optional Kokoro language code override |
 | speed | 1.0 | 0.5 - 2.0 |
 | response_format | wav | wav, mp3, opus, flac, pcm |
 | bitrate | 192k | 128k, 192k, 320k |
+
+By default, the service infers the Kokoro `lang_code` from the voice prefix. For example, `ff_` voices use the French pipeline and `af_` voices use the American English pipeline. You can still provide `lang_code` explicitly when needed; explicit `lang_code` takes priority over inference.
 
 ### `GET /v1/voices`
 
@@ -86,6 +90,8 @@ Open `http://localhost:8880/` in your browser. Select a voice, adjust speed, typ
 | `jf_` / `jm_` | Japanese | 5 |
 | `pf_` / `pm_` | Portuguese | 3 |
 | `zf_` | Chinese | 4 |
+
+These prefixes also determine the default synthesis language unless you override it with `lang_code` in the request.
 
 ## Benchmark
 
