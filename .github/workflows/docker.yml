@@ -21,7 +21,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: cipherdolls/kokoro-cuda
+          images: ffaerber/kokoro-cuda
           tags: |
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
@@ -38,5 +38,5 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: cipherdolls/kokoro-cuda
+          repository: ffaerber/kokoro-cuda
           readme-filepath: README.md

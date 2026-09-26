@@ -1,10 +1,10 @@
 # Kokoro CUDA
 
-[![Docker Image](https://github.com/cipherdolls/kokoro-cuda/actions/workflows/docker.yml/badge.svg)](https://github.com/cipherdolls/kokoro-cuda/actions/workflows/docker.yml)
+[![Docker Image](https://github.com/ffaerber/kokoro-cuda/actions/workflows/docker.yml/badge.svg)](https://github.com/ffaerber/kokoro-cuda/actions/workflows/docker.yml)
 
 Minimal Kokoro TTS API with CUDA support for NVIDIA GPUs (Ada Lovelace and newer).
 
-**Source:** https://github.com/cipherdolls/kokoro-cuda
+**Source:** https://github.com/ffaerber/kokoro-cuda
 
 ## Features
 
